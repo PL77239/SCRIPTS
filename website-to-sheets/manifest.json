@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Website → Sheets",
-  "version": "1.0.0",
-  "description": "Save company details from any website into a Google Spreadsheet. Switch between sheets like repos.",
+  "version": "1.1.0",
+  "description": "Save company details from any website into a Google Spreadsheet. Works on Chrome, Edge, Opera, Opera GX; Safari with conversion.",
   "permissions": [
     "activeTab",
     "scripting",

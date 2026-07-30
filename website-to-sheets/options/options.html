@@ -125,6 +125,36 @@
       </section>
 
       <section class="card">
+        <h2>Safari / fallback Web OAuth client</h2>
+        <p>
+          Chrome, Edge, Opera, and Opera GX normally use the Client ID in
+          <code>manifest.json</code>. Safari (and some fallbacks) need a
+          <strong>Web application</strong> OAuth client instead. Paste that
+          Client ID here and add this redirect URI in Google Cloud:
+        </p>
+        <p class="mono highlight" id="redirectUri">Loading…</p>
+        <label class="field">
+          Web OAuth client ID
+          <input
+            type="text"
+            id="webClientId"
+            placeholder="xxxxx.apps.googleusercontent.com"
+            autocomplete="off"
+          />
+        </label>
+        <div class="actions">
+          <button type="button" class="btn secondary" id="saveWebClient">
+            Save Web client ID
+          </button>
+        </div>
+        <p class="hint" id="webClientStatus"></p>
+        <p>
+          Full browser notes:
+          <a href="../BROWSERS.md">BROWSERS.md</a> (also in the repo).
+        </p>
+      </section>
+
+      <section class="card">
         <h2>How the switcher works</h2>
         <p>
           The popup’s top control lists every spreadsheet you’ve linked. Click

@@ -128,27 +128,52 @@ async function getActiveTab() {
   return tab;
 }
 
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: "PING" });
+    return true;
+  } catch {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ["content/extract.js"],
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 async function extractFromPage() {
   const tab = await getActiveTab();
   if (!tab?.id) return null;
 
-  // Prefer content-script message
-  try {
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "EXTRACT_PAGE",
-    });
-    if (response?.ok) return response.result;
-  } catch {
-    /* content script may not be injected yet */
-  }
+  els.refreshExtract.disabled = true;
+  const prevLabel = els.refreshExtract.textContent;
+  els.refreshExtract.textContent = "Scanning…";
 
-  // Fallback: inject extractor once
   try {
+    await ensureContentScript(tab.id);
+
+    // Deep scan: current page + related Contact/About/Products pages
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        type: "EXTRACT_PAGE",
+        deep: true,
+      });
+      if (response?.ok) return response.result;
+      if (response?.error) throw new Error(response.error);
+    } catch (err) {
+      /* fall through to inline fallback */
+    }
+
+    // Fallback: inject a minimal same-page extractor
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => {
+      func: async () => {
         if (typeof window.__websiteToSheetsExtract === "function") {
-          return window.__websiteToSheetsExtract();
+          return await window.__websiteToSheetsExtract({ deep: true });
         }
         const title = document.title || "";
         const company = title.split(/\s+[|\-–—:]\s+/)[0] || title;
@@ -173,6 +198,7 @@ async function extractFromPage() {
           products: desc.slice(0, 280),
           pageTitle: title,
           pageUrl: location.href,
+          scanNote: "Current page only",
         };
       },
     });
@@ -188,7 +214,11 @@ async function extractFromPage() {
       email: "",
       emailSuggestions: [],
       products: "",
+      scanNote: "",
     };
+  } finally {
+    els.refreshExtract.disabled = false;
+    els.refreshExtract.textContent = prevLabel;
   }
 }
 
@@ -295,7 +325,7 @@ els.browseDriveBtn.addEventListener("click", async () => {
 els.refreshExtract.addEventListener("click", async () => {
   const data = await extractFromPage();
   fillForm(data);
-  showToast("Page re-scanned.");
+  showToast(data?.scanNote || "Page re-scanned.");
 });
 
 els.saveForm.addEventListener("submit", async (e) => {
@@ -348,4 +378,5 @@ document.addEventListener("click", (e) => {
 
   const data = await extractFromPage();
   fillForm(data);
+  if (data?.scanNote) showToast(data.scanNote);
 })();

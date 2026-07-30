@@ -17,6 +17,9 @@ function send(type, payload = {}) {
 const extensionIdEl = document.getElementById("extensionId");
 const authLine = document.getElementById("authLine");
 const status = document.getElementById("status");
+const redirectUri = document.getElementById("redirectUri");
+const webClientId = document.getElementById("webClientId");
+const webClientStatus = document.getElementById("webClientStatus");
 
 extensionIdEl.textContent = chrome.runtime.id;
 
@@ -28,6 +31,16 @@ async function refreshAuth() {
       : "Not signed in yet.";
   } catch (err) {
     authLine.textContent = `Auth check failed: ${err.message}`;
+  }
+}
+
+async function refreshWebClient() {
+  try {
+    const data = await send("GET_WEB_CLIENT_ID");
+    redirectUri.textContent = data.redirectUri || "(unavailable in this browser)";
+    webClientId.value = data.clientId || "";
+  } catch (err) {
+    redirectUri.textContent = err.message;
   }
 }
 
@@ -52,4 +65,15 @@ document.getElementById("signOut").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("saveWebClient").addEventListener("click", async () => {
+  try {
+    await send("SET_WEB_CLIENT_ID", { clientId: webClientId.value.trim() });
+    webClientStatus.textContent = "Saved.";
+    await refreshWebClient();
+  } catch (err) {
+    webClientStatus.textContent = err.message;
+  }
+});
+
 refreshAuth();
+refreshWebClient();

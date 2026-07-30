@@ -171,6 +171,35 @@ h1 {
   font-size: 13px;
 }
 
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+
+.field input {
+  width: 100%;
+  background: #0a0e12;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 code {
   font-family: var(--mono);
   font-size: 0.9em;

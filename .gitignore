@@ -1,0 +1,9 @@
+# Ignore local OAuth secrets / editor junk
+*.pem
+.env
+.env.*
+.DS_Store
+Thumbs.db
+node_modules/
+.vscode/
+.idea/

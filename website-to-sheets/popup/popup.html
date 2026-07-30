@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Website → Sheets</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <div class="brand-name">Website → Sheets</div>
+          <div class="brand-sub" id="authStatus">Checking Google…</div>
+        </div>
+      </div>
+      <button type="button" class="icon-btn" id="openOptions" title="Settings">
+        ⚙
+      </button>
+    </header>
+
+    <!-- Spreadsheet switcher (Cursor-style repo picker) -->
+    <section class="switcher" aria-label="Spreadsheet switcher">
+      <button type="button" class="switcher-trigger" id="switcherTrigger">
+        <span class="switcher-label">Spreadsheet</span>
+        <span class="switcher-value" id="activeSheetName">None selected</span>
+        <span class="switcher-chevron" aria-hidden="true">▾</span>
+      </button>
+      <div class="switcher-panel hidden" id="switcherPanel" role="listbox">
+        <div class="switcher-search-wrap">
+          <input
+            type="search"
+            id="switcherSearch"
+            placeholder="Filter spreadsheets…"
+            autocomplete="off"
+          />
+        </div>
+        <ul class="switcher-list" id="switcherList"></ul>
+        <div class="switcher-actions">
+          <button type="button" class="linkish" id="addSheetBtn">
+            + Add spreadsheet by URL
+          </button>
+          <button type="button" class="linkish" id="browseDriveBtn">
+            Browse recent from Drive
+          </button>
+        </div>
+        <div class="add-sheet-form hidden" id="addSheetForm">
+          <input
+            type="url"
+            id="sheetUrlInput"
+            placeholder="Paste Google Sheets URL or ID"
+          />
+          <input
+            type="text"
+            id="sheetTabInput"
+            placeholder="Tab name (default: Sheet1)"
+          />
+          <div class="row-actions">
+            <button type="button" class="btn secondary" id="cancelAddSheet">
+              Cancel
+            </button>
+            <button type="button" class="btn primary" id="confirmAddSheet">
+              Add
+            </button>
+          </div>
+        </div>
+        <div class="drive-list hidden" id="driveList"></div>
+      </div>
+    </section>
+
+    <form id="saveForm" class="form">
+      <label>
+        Company name
+        <input type="text" id="companyName" required autocomplete="organization" />
+      </label>
+      <label>
+        Website address
+        <input type="url" id="website" required autocomplete="url" />
+      </label>
+      <label>
+        E-mail address
+        <input type="email" id="email" list="emailSuggestions" autocomplete="email" />
+        <datalist id="emailSuggestions"></datalist>
+      </label>
+      <label>
+        Products / services
+        <textarea id="products" rows="3" placeholder="What do they sell?"></textarea>
+      </label>
+
+      <div class="form-footer">
+        <button type="button" class="btn ghost" id="refreshExtract">
+          Re-scan page
+        </button>
+        <button type="submit" class="btn primary" id="saveBtn">
+          Save to sheet
+        </button>
+      </div>
+    </form>
+
+    <p class="toast hidden" id="toast" role="status"></p>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

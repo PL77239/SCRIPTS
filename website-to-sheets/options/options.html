@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Website → Sheets — Setup</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <p class="eyebrow">Scripts / Website → Sheets</p>
+        <h1>Connect Google Sheets</h1>
+        <p class="lede">
+          One-time Google Cloud setup so the extension can write rows to your
+          spreadsheets. After that, switch sheets from the popup the same way
+          you switch repositories in Cursor.
+        </p>
+      </header>
+
+      <ol class="steps">
+        <li>
+          <h2>Create a Google Cloud project</h2>
+          <p>
+            Open
+            <a
+              href="https://console.cloud.google.com/"
+              target="_blank"
+              rel="noopener"
+              >Google Cloud Console</a
+            >, create a project (or pick an existing one).
+          </p>
+        </li>
+        <li>
+          <h2>Enable APIs</h2>
+          <p>Enable both of these for the project:</p>
+          <ul>
+            <li>
+              <a
+                href="https://console.cloud.google.com/apis/library/sheets.googleapis.com"
+                target="_blank"
+                rel="noopener"
+                >Google Sheets API</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                target="_blank"
+                rel="noopener"
+                >Google Drive API</a
+              >
+              (used only to browse recent spreadsheets)
+            </li>
+          </ul>
+        </li>
+        <li>
+          <h2>Configure the OAuth consent screen</h2>
+          <p>
+            Under <strong>APIs &amp; Services → OAuth consent screen</strong>,
+            choose <em>External</em> (or Internal for Workspace). Add your
+            Google account as a test user while the app is in Testing.
+          </p>
+          <p>Scopes needed:</p>
+          <ul class="mono">
+            <li>https://www.googleapis.com/auth/spreadsheets</li>
+            <li>https://www.googleapis.com/auth/drive.readonly</li>
+          </ul>
+        </li>
+        <li>
+          <h2>Create an OAuth client ID</h2>
+          <p>
+            <strong>APIs &amp; Services → Credentials → Create credentials →
+            OAuth client ID</strong>. Application type:
+            <em>Chrome Extension</em>.
+          </p>
+          <p>
+            Item ID (extension ID) after you load the unpacked extension once:
+          </p>
+          <p class="mono highlight" id="extensionId">Loading…</p>
+          <p>
+            Paste that ID into the Chrome Extension OAuth client, then copy the
+            generated Client ID.
+          </p>
+        </li>
+        <li>
+          <h2>Paste the Client ID into the extension</h2>
+          <p>
+            Open <code>manifest.json</code> and replace
+            <code>YOUR_CLIENT_ID.apps.googleusercontent.com</code> under
+            <code>oauth2.client_id</code>. Reload the extension on
+            <code>chrome://extensions</code>.
+          </p>
+        </li>
+        <li>
+          <h2>Prepare a spreadsheet</h2>
+          <p>
+            Create (or open) a Google Sheet. The extension will write a header
+            row automatically:
+          </p>
+          <p class="mono highlight">
+            Company name | Website address | E-mail address | Products /
+            services | Saved at
+          </p>
+          <p>
+            In the popup, open the spreadsheet switcher →
+            <em>Add spreadsheet by URL</em> (or browse Drive) → select it as
+            active.
+          </p>
+        </li>
+      </ol>
+
+      <section class="card">
+        <h2>Account</h2>
+        <p id="authLine">Checking…</p>
+        <div class="actions">
+          <button type="button" class="btn primary" id="signIn">
+            Sign in with Google
+          </button>
+          <button type="button" class="btn secondary" id="signOut">
+            Sign out
+          </button>
+        </div>
+        <p class="hint" id="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>How the switcher works</h2>
+        <p>
+          The popup’s top control lists every spreadsheet you’ve linked. Click
+          one to make it active — new saves go there until you switch again,
+          similar to picking a repo in Cursor. You can remove entries from the
+          list without deleting the Google file.
+        </p>
+      </section>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

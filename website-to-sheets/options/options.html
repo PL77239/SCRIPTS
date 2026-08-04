@@ -18,6 +18,18 @@
         </p>
       </header>
 
+      <section class="card callout" id="operaCallout">
+        <h2>Using Opera or Opera GX?</h2>
+        <p>
+          Opera does <strong>not</strong> support Chrome’s
+          <code>getAuthToken</code> (that’s the “function unsupported” error).
+          You need a Google OAuth client of type
+          <strong>Web application</strong> — not “Chrome Extension” — then
+          paste it in the Web OAuth section below and click
+          <em>Sign in with Google</em>.
+        </p>
+      </section>
+
       <ol class="steps">
         <li>
           <h2>Create a Google Cloud project</h2>
@@ -68,69 +80,49 @@
           </ul>
         </li>
         <li>
-          <h2>Create an OAuth client ID</h2>
+          <h2>Create OAuth client(s)</h2>
           <p>
-            <strong>APIs &amp; Services → Credentials → Create credentials →
-            OAuth client ID</strong>. Application type:
-            <em>Chrome Extension</em>.
-          </p>
-          <p>
-            Item ID (extension ID) after you load the unpacked extension once:
+            <strong>Chrome / Edge:</strong> Credentials → Create → OAuth client
+            ID → application type <em>Chrome Extension</em>. Use this extension
+            ID as the item ID, then put the Client ID in
+            <code>manifest.json</code> → <code>oauth2.client_id</code>.
           </p>
           <p class="mono highlight" id="extensionId">Loading…</p>
           <p>
-            Paste that ID into the Chrome Extension OAuth client, then copy the
-            generated Client ID.
+            <strong>Opera / Opera GX / Safari:</strong> Create a
+            <em>second</em> client with application type
+            <strong>Web application</strong>. Under Authorized redirect URIs,
+            add exactly:
           </p>
-        </li>
-        <li>
-          <h2>Paste the Client ID into the extension</h2>
+          <p class="mono highlight" id="redirectUriTop">Loading…</p>
           <p>
-            Open <code>manifest.json</code> and replace
-            <code>YOUR_CLIENT_ID.apps.googleusercontent.com</code> under
-            <code>oauth2.client_id</code>. Reload the extension on
-            <code>chrome://extensions</code>.
+            Then paste that Web Client ID in the box below (not only in
+            <code>manifest.json</code>).
           </p>
         </li>
         <li>
           <h2>Prepare a spreadsheet</h2>
           <p>
-            Create (or open) a Google Sheet. The extension will write a header
-            row automatically:
+            The sheet must be editable by the Google account you sign in with
+            (your own sheet is fine). “Anyone with the link” alone is not enough
+            for the API — sign-in is still required. The extension writes:
           </p>
           <p class="mono highlight">
             Company name | Website address | E-mail address | Products /
             services | Saved at
           </p>
           <p>
-            In the popup, open the spreadsheet switcher →
-            <em>Add spreadsheet by URL</em> (or browse Drive) → select it as
-            active.
+            In the popup: spreadsheet switcher →
+            <em>Add spreadsheet by URL</em> → select it as active.
           </p>
         </li>
       </ol>
 
       <section class="card">
-        <h2>Account</h2>
-        <p id="authLine">Checking…</p>
-        <div class="actions">
-          <button type="button" class="btn primary" id="signIn">
-            Sign in with Google
-          </button>
-          <button type="button" class="btn secondary" id="signOut">
-            Sign out
-          </button>
-        </div>
-        <p class="hint" id="status"></p>
-      </section>
-
-      <section class="card">
-        <h2>Safari / fallback Web OAuth client</h2>
+        <h2>Web OAuth client (required on Opera)</h2>
         <p>
-          Chrome, Edge, Opera, and Opera GX normally use the Client ID in
-          <code>manifest.json</code>. Safari (and some fallbacks) need a
-          <strong>Web application</strong> OAuth client instead. Paste that
-          Client ID here and add this redirect URI in Google Cloud:
+          Paste the <strong>Web application</strong> Client ID here. Redirect
+          URI to add in Google Cloud:
         </p>
         <p class="mono highlight" id="redirectUri">Loading…</p>
         <label class="field">
@@ -148,10 +140,20 @@
           </button>
         </div>
         <p class="hint" id="webClientStatus"></p>
-        <p>
-          Full browser notes:
-          <a href="../BROWSERS.md">BROWSERS.md</a> (also in the repo).
-        </p>
+      </section>
+
+      <section class="card">
+        <h2>Account</h2>
+        <p id="authLine">Checking…</p>
+        <div class="actions">
+          <button type="button" class="btn primary" id="signIn">
+            Sign in with Google
+          </button>
+          <button type="button" class="btn secondary" id="signOut">
+            Sign out
+          </button>
+        </div>
+        <p class="hint" id="status"></p>
       </section>
 
       <section class="card">

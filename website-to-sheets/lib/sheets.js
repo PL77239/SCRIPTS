@@ -1,7 +1,8 @@
 /**
  * Google Sheets API helpers.
- * Auth: chrome.identity.getAuthToken (Chrome/Edge/Opera) with
- * launchWebAuthFlow fallback (Safari / browsers without getAuthToken).
+ * Auth: chrome.identity.getAuthToken when the browser supports it (Chrome/Edge).
+ * Opera/Safari and other Chromium forks often stub getAuthToken as
+ * "function unsupported" — those use launchWebAuthFlow + a Web OAuth client.
  */
 
 const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
@@ -24,13 +25,64 @@ const HEADER_ROW = [
   "Saved at",
 ];
 
-function supportsGetAuthToken() {
+/** Cached probe: null = unknown, true/false = getAuthToken usable */
+let getAuthTokenSupported = null;
+
+function hasGetAuthTokenApi() {
   return typeof chrome.identity?.getAuthToken === "function";
+}
+
+function isUnsupportedIdentityError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("unsupported") ||
+    msg.includes("not supported") ||
+    msg.includes("is not available")
+  );
+}
+
+function looksLikeOpera() {
+  try {
+    const ua = self.navigator?.userAgent || "";
+    // Opera / Opera GX include "OPR/" ; avoid matching Chrome alone
+    return /\bOPR\/|\bOpera\b/i.test(ua);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Probe whether getAuthToken actually works (Opera exposes it but rejects).
+ */
+async function probeGetAuthTokenSupport() {
+  if (!hasGetAuthTokenApi()) return false;
+  // Opera: don't bother — always unsupported for extension OAuth
+  if (looksLikeOpera()) return false;
+
+  try {
+    await getTokenViaGetAuthToken(false);
+    return true;
+  } catch (err) {
+    if (isUnsupportedIdentityError(err)) return false;
+    // Other failures (not signed in, OAuth not granted) mean the API exists
+    return true;
+  }
 }
 
 async function getStoredWebClientId() {
   const data = await chrome.storage.sync.get(WEB_CLIENT_ID_KEY);
   return data[WEB_CLIENT_ID_KEY] || "";
+}
+
+/** Prefer Options Web client ID; fall back to manifest oauth2.client_id. */
+async function resolveWebClientId() {
+  const stored = await getStoredWebClientId();
+  if (stored) return stored;
+  const fromManifest = chrome.runtime.getManifest()?.oauth2?.client_id || "";
+  if (fromManifest && !fromManifest.startsWith("YOUR_CLIENT_ID")) {
+    return fromManifest;
+  }
+  return "";
 }
 
 export async function setWebClientId(clientId) {
@@ -62,20 +114,42 @@ async function clearStoredAccessToken() {
 }
 
 function parseTokenFromRedirect(redirectUrl) {
-  const hash = new URL(redirectUrl).hash.replace(/^#/, "");
-  const params = new URLSearchParams(hash);
-  const token = params.get("access_token");
-  const expiresIn = Number(params.get("expires_in") || "3600");
+  // Implicit flow returns tokens in the hash; some browsers use query.
+  const url = new URL(redirectUrl);
+  const hash = url.hash.replace(/^#/, "");
+  const fromHash = new URLSearchParams(hash);
+  const fromQuery = url.searchParams;
+  const token =
+    fromHash.get("access_token") || fromQuery.get("access_token");
+  const expiresIn = Number(
+    fromHash.get("expires_in") || fromQuery.get("expires_in") || "3600"
+  );
+  const error =
+    fromHash.get("error") ||
+    fromQuery.get("error") ||
+    fromHash.get("error_description") ||
+    fromQuery.get("error_description");
   if (!token) {
     throw new Error(
-      "Google sign-in did not return an access token. Check the Web OAuth client ID and redirect URI."
+      error
+        ? `Google sign-in failed: ${error}`
+        : "Google sign-in did not return an access token. Create a Web application OAuth client (not Chrome Extension), add the redirect URI from Options, and paste that Client ID on the Options page."
     );
   }
   return { token, expiresIn };
 }
 
+function webAuthSetupError() {
+  const redirect = getOAuthRedirectUri() || "(open Options to see redirect URI)";
+  return new Error(
+    `Opera / this browser cannot use Chrome’s getAuthToken (“function unsupported”). ` +
+      `Open the extension Options page → create a Google Cloud OAuth client of type “Web application” → ` +
+      `add redirect URI ${redirect} → paste the Web Client ID there → Sign in, then Save again.`
+  );
+}
+
 /**
- * Safari / fallback OAuth via launchWebAuthFlow + Web application client ID.
+ * Cross-browser OAuth via launchWebAuthFlow + Web application client ID.
  * @param {boolean} interactive
  */
 async function getTokenViaWebAuthFlow(interactive) {
@@ -85,15 +159,15 @@ async function getTokenViaWebAuthFlow(interactive) {
     throw new Error("Not signed in.");
   }
 
-  const clientId = await getStoredWebClientId();
+  const clientId = await resolveWebClientId();
   if (!clientId) {
-    throw new Error(
-      "This browser needs a Web OAuth client ID (Safari). Set it on the Options page — see BROWSERS.md."
-    );
+    throw webAuthSetupError();
   }
 
   if (typeof chrome.identity?.launchWebAuthFlow !== "function") {
-    throw new Error("launchWebAuthFlow is not available in this browser.");
+    throw new Error(
+      "launchWebAuthFlow is not available in this browser. Try Chrome or Edge, or update Opera."
+    );
   }
 
   const redirectUri = chrome.identity.getRedirectURL();
@@ -110,11 +184,17 @@ async function getTokenViaWebAuthFlow(interactive) {
       { url: authUrl, interactive: true },
       (responseUrl) => {
         if (chrome.runtime.lastError || !responseUrl) {
-          reject(
-            new Error(
-              chrome.runtime.lastError?.message || "Sign-in was cancelled."
-            )
-          );
+          const msg = chrome.runtime.lastError?.message || "Sign-in was cancelled.";
+          // Common when Chrome Extension client ID is used with web flow
+          if (/redirect|client|invalid|mismatch/i.test(msg)) {
+            reject(
+              new Error(
+                `${msg} — Use a Web application OAuth client (not “Chrome Extension”) and add this redirect URI in Google Cloud: ${redirectUri}`
+              )
+            );
+            return;
+          }
+          reject(new Error(msg));
           return;
         }
         resolve(responseUrl);
@@ -149,17 +229,31 @@ async function getTokenViaGetAuthToken(interactive) {
  * @returns {Promise<string>}
  */
 export async function getAuthToken(interactive = true) {
-  if (supportsGetAuthToken()) {
+  if (getAuthTokenSupported === null) {
+    getAuthTokenSupported = await probeGetAuthTokenSupport();
+  }
+
+  if (getAuthTokenSupported) {
     try {
       return await getTokenViaGetAuthToken(interactive);
     } catch (err) {
-      // If getAuthToken exists but fails (e.g. bad Chrome client on Opera),
-      // try web-flow when a web client id is configured.
-      const webId = await getStoredWebClientId();
-      if (!webId) throw err;
-      return getTokenViaWebAuthFlow(interactive);
+      if (isUnsupportedIdentityError(err)) {
+        getAuthTokenSupported = false;
+        return getTokenViaWebAuthFlow(interactive);
+      }
+      // Signed-out / revoked on Chrome: still try web flow if configured
+      const webId = await resolveWebClientId();
+      if (webId && interactive) {
+        try {
+          return await getTokenViaWebAuthFlow(interactive);
+        } catch {
+          throw err;
+        }
+      }
+      throw err;
     }
   }
+
   return getTokenViaWebAuthFlow(interactive);
 }
 
@@ -171,7 +265,10 @@ export async function revokeAuthToken() {
     await clearStoredAccessToken();
   }
 
-  if (!supportsGetAuthToken()) return;
+  if (getAuthTokenSupported === null) {
+    getAuthTokenSupported = await probeGetAuthTokenSupport();
+  }
+  if (!getAuthTokenSupported) return;
 
   const token = await getTokenViaGetAuthToken(false).catch(() => null);
   if (!token) return;
@@ -197,7 +294,7 @@ async function sheetsFetch(path, options = {}) {
   });
 
   if (res.status === 401) {
-    if (supportsGetAuthToken()) {
+    if (getAuthTokenSupported) {
       await new Promise((r) =>
         chrome.identity.removeCachedAuthToken({ token }, r)
       );

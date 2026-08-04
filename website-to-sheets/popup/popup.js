@@ -343,7 +343,11 @@ els.saveForm.addEventListener("submit", async (e) => {
     setAuthUi(true);
     showToast(`Saved to “${result.spreadsheet.name}”.`);
   } catch (err) {
-    showToast(err.message, true);
+    const msg = err.message || String(err);
+    showToast(msg, true);
+    if (/unsupported|web application|options page|oauth|sign-in/i.test(msg)) {
+      els.authStatus.textContent = "Setup needed — open ⚙ Options";
+    }
   } finally {
     els.saveBtn.disabled = false;
   }

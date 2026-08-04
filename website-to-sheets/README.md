@@ -2,7 +2,7 @@
 
 Browser extension that saves company details from any website into a **Google Spreadsheet**, with a **spreadsheet switcher** (same idea as switching repositories in Cursor).
 
-**Browsers:** Chrome, Edge, Opera, Opera GX out of the box. Safari needs a short conversion step — see [BROWSERS.md](./BROWSERS.md).
+**Browsers:** Chrome & Edge use a Chrome Extension OAuth client. **Opera / Opera GX need a Web application OAuth client** (see [BROWSERS.md](./BROWSERS.md)) — otherwise Save shows “function unsupported”. Safari needs an extra conversion step.
 
 ## What it saves
 

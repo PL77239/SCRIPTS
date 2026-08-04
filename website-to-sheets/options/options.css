@@ -130,6 +130,15 @@ h1 {
   margin-bottom: 16px;
 }
 
+.card.callout {
+  border-color: rgba(61, 154, 106, 0.45);
+  background: linear-gradient(
+    135deg,
+    rgba(61, 154, 106, 0.12),
+    var(--panel)
+  );
+}
+
 .card h2 {
   margin: 0 0 8px;
   font-size: 1.1rem;

@@ -5,6 +5,7 @@
 import {
   appendCompanyRow,
   getSpreadsheetTitle,
+  resolveSheetName,
   listRecentSpreadsheets,
   revokeAuthToken,
   getAuthToken,
@@ -19,6 +20,7 @@ import {
   parseSpreadsheetId,
   removeSpreadsheet,
   setActiveSpreadsheetId,
+  updateSpreadsheet,
 } from "./lib/storage.js";
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -74,10 +76,14 @@ async function handleMessage(message) {
       const name =
         message.name ||
         (await getSpreadsheetTitle(id).catch(() => "Untitled spreadsheet"));
+      const preferredTab = (message.sheetName || "").trim();
+      const sheetName = await resolveSheetName(id, preferredTab).catch(
+        () => preferredTab || ""
+      );
       await addSpreadsheet({
         id,
         name,
-        sheetName: message.sheetName || "Sheet1",
+        sheetName,
       });
       await setActiveSpreadsheetId(id);
       return getSpreadsheets();
@@ -95,7 +101,7 @@ async function handleMessage(message) {
           "No active spreadsheet. Add one from the switcher first."
         );
       }
-      await appendCompanyRow(
+      const { sheetName } = await appendCompanyRow(
         active.id,
         {
           companyName: message.row.companyName,
@@ -103,9 +109,17 @@ async function handleMessage(message) {
           email: message.row.email,
           products: message.row.products,
         },
-        active.sheetName || "Sheet1"
+        active.sheetName || ""
       );
-      return { spreadsheet: active };
+      // Remember the real tab name (e.g. Arkusz1 instead of Sheet1)
+      if (sheetName && sheetName !== active.sheetName) {
+        await updateSpreadsheet(active.id, { sheetName });
+      }
+      const spreadsheet = (await getActiveSpreadsheet()) || {
+        ...active,
+        sheetName,
+      };
+      return { spreadsheet, sheetName };
     }
     default:
       throw new Error(`Unknown message type: ${message.type}`);

@@ -77,7 +77,8 @@ export async function addSpreadsheet(entry) {
       url:
         entry.url ||
         `https://docs.google.com/spreadsheets/d/${entry.id}/edit`,
-      sheetName: entry.sheetName || "Sheet1",
+      // Empty sheetName => auto-detect first/real tab on save
+      sheetName: entry.sheetName || "",
     },
   ];
   await setSpreadsheets(next);
@@ -85,6 +86,18 @@ export async function addSpreadsheet(entry) {
     await setActiveSpreadsheetId(entry.id);
   }
   return next;
+}
+
+/**
+ * Update fields on a stored spreadsheet entry (e.g. resolved tab name).
+ * @param {string} id
+ * @param {Partial<SpreadsheetEntry>} patch
+ */
+export async function updateSpreadsheet(id, patch) {
+  const list = await getSpreadsheets();
+  const next = list.map((s) => (s.id === id ? { ...s, ...patch } : s));
+  await setSpreadsheets(next);
+  return next.find((s) => s.id === id) || null;
 }
 
 /** @param {string} id */

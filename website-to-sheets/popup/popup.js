@@ -341,7 +341,8 @@ els.saveForm.addEventListener("submit", async (e) => {
       },
     });
     setAuthUi(true);
-    showToast(`Saved to “${result.spreadsheet.name}”.`);
+    const tab = result.sheetName ? ` (tab: ${result.sheetName})` : "";
+    showToast(`Saved to “${result.spreadsheet.name}”${tab}.`);
   } catch (err) {
     const msg = err.message || String(err);
     showToast(msg, true);

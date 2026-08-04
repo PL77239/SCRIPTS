@@ -467,7 +467,7 @@ async function sheetsFetch(path, options = {}) {
 /** @param {string} spreadsheetId */
 export async function getSpreadsheetMeta(spreadsheetId) {
   return sheetsFetch(
-    `/${spreadsheetId}?fields=spreadsheetId,properties.title,sheets.properties.title`
+    `/${spreadsheetId}?fields=spreadsheetId,properties.title,sheets.properties(sheetId,title,index)`
   );
 }
 
@@ -477,16 +477,64 @@ export async function getSpreadsheetTitle(spreadsheetId) {
   return meta.properties?.title || "Untitled spreadsheet";
 }
 
+/** @param {string} spreadsheetId */
+export async function listSheetTitles(spreadsheetId) {
+  const meta = await getSpreadsheetMeta(spreadsheetId);
+  return (meta.sheets || [])
+    .map((s) => s.properties?.title)
+    .filter(Boolean);
+}
+
+/**
+ * Pick a real tab name. Localized Sheets often use Arkusz1 / Tabelle1 / etc.
+ * instead of Sheet1.
+ * @param {string} spreadsheetId
+ * @param {string} [preferred]
+ */
+export async function resolveSheetName(spreadsheetId, preferred) {
+  const titles = await listSheetTitles(spreadsheetId);
+  if (!titles.length) {
+    throw new Error("This spreadsheet has no tabs to write to.");
+  }
+
+  const wanted = (preferred || "").trim();
+  if (wanted && titles.includes(wanted)) return wanted;
+
+  // Prefer common default names if present, else first tab
+  const defaults = [
+    "Sheet1",
+    "Arkusz1",
+    "Tabelle1",
+    "Feuille 1",
+    "Hoja 1",
+    "Foglio1",
+  ];
+  for (const d of defaults) {
+    if (titles.includes(d)) return d;
+  }
+  return titles[0];
+}
+
+/** A1 range with a properly quoted sheet title. */
+export function toA1Range(sheetName, a1) {
+  if (!sheetName) return a1;
+  const quoted = `'${String(sheetName).replace(/'/g, "''")}'`;
+  return `${quoted}!${a1}`;
+}
+
 /**
  * Ensure the first row has our expected headers.
  * @param {string} spreadsheetId
- * @param {string} [sheetName="Sheet1"]
+ * @param {string} sheetName resolved tab title
  */
-export async function ensureHeaderRow(spreadsheetId, sheetName = "Sheet1") {
-  const range = encodeURIComponent(`'${sheetName}'!A1:E1`);
-  const existing = await sheetsFetch(
-    `/${spreadsheetId}/values/${range}`
-  ).catch(() => ({ values: [] }));
+export async function ensureHeaderRow(spreadsheetId, sheetName) {
+  const range = encodeURIComponent(toA1Range(sheetName, "A1:E1"));
+  let existing = { values: [] };
+  try {
+    existing = await sheetsFetch(`/${spreadsheetId}/values/${range}`);
+  } catch {
+    existing = { values: [] };
+  }
 
   const first = existing.values?.[0];
   if (first && first[0] === HEADER_ROW[0]) return;
@@ -502,17 +550,24 @@ export async function ensureHeaderRow(spreadsheetId, sheetName = "Sheet1") {
 
 /**
  * Append one company row to the active sheet.
+ * Resolves the real tab name when "Sheet1" (or another preferred name) is missing.
  * @param {string} spreadsheetId
  * @param {{ companyName: string, website: string, email: string, products: string }} row
- * @param {string} [sheetName="Sheet1"]
+ * @param {string} [preferredSheetName]
+ * @returns {Promise<{ append: object, sheetName: string }>}
  */
-export async function appendCompanyRow(spreadsheetId, row, sheetName = "Sheet1") {
+export async function appendCompanyRow(
+  spreadsheetId,
+  row,
+  preferredSheetName = ""
+) {
+  const sheetName = await resolveSheetName(spreadsheetId, preferredSheetName);
   await ensureHeaderRow(spreadsheetId, sheetName);
 
-  const range = encodeURIComponent(`'${sheetName}'!A:E`);
+  const range = encodeURIComponent(toA1Range(sheetName, "A:E"));
   const savedAt = new Date().toISOString();
 
-  return sheetsFetch(
+  const append = await sheetsFetch(
     `/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
@@ -529,6 +584,7 @@ export async function appendCompanyRow(spreadsheetId, row, sheetName = "Sheet1")
       }),
     }
   );
+  return { append, sheetName };
 }
 
 /**

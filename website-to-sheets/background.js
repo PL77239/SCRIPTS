@@ -8,9 +8,9 @@ import {
   listRecentSpreadsheets,
   revokeAuthToken,
   getAuthToken,
-  getWebClientId,
   setWebClientId,
-  getOAuthRedirectUri,
+  setWebClientSecret,
+  getWebClientCredentials,
 } from "./lib/sheets.js";
 import {
   addSpreadsheet,
@@ -49,17 +49,14 @@ async function handleMessage(message) {
       return { signedIn: false };
     }
     case "GET_WEB_CLIENT_ID": {
-      return {
-        clientId: await getWebClientId(),
-        redirectUri: getOAuthRedirectUri(),
-      };
+      return getWebClientCredentials();
     }
     case "SET_WEB_CLIENT_ID": {
       await setWebClientId(message.clientId);
-      return {
-        clientId: await getWebClientId(),
-        redirectUri: getOAuthRedirectUri(),
-      };
+      if (typeof message.clientSecret === "string") {
+        await setWebClientSecret(message.clientSecret);
+      }
+      return getWebClientCredentials();
     }
     case "LIST_SPREADSHEETS": {
       return getSpreadsheets();

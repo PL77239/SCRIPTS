@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Website → Sheets",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Save company details from any website into a Google Spreadsheet. Works on Chrome, Edge, Opera, Opera GX; Safari with conversion.",
   "permissions": [
     "activeTab",
@@ -11,7 +11,9 @@
   ],
   "host_permissions": [
     "https://sheets.googleapis.com/*",
-    "https://www.googleapis.com/*"
+    "https://www.googleapis.com/*",
+    "https://oauth2.googleapis.com/*",
+    "https://accounts.google.com/*"
   ],
   "oauth2": {
     "client_id": "637928515737-rlvfqook0777si6ikb8l52pm16peqepe.apps.googleusercontent.com",

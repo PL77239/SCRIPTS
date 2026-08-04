@@ -139,6 +139,25 @@ h1 {
   );
 }
 
+.card.callout.danger {
+  border-color: rgba(212, 106, 106, 0.55);
+  background: linear-gradient(
+    135deg,
+    rgba(212, 106, 106, 0.12),
+    var(--panel)
+  );
+}
+
+.card.callout.danger ol {
+  margin: 0 0 12px;
+  padding-left: 1.2em;
+  color: var(--muted);
+}
+
+.card.callout.danger li {
+  margin-bottom: 6px;
+}
+
 .card h2 {
   margin: 0 0 8px;
   font-size: 1.1rem;

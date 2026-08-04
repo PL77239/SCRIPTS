@@ -4,54 +4,53 @@
 | --- | --- | --- |
 | **Google Chrome** | Yes | Chrome Extension OAuth client in `manifest.json` |
 | **Microsoft Edge** | Yes | Same as Chrome |
-| **Opera** | Yes, with Web OAuth | `getAuthToken` is **unsupported** — use Web application client |
+| **Opera** | Yes, with Web OAuth | Needs Web application **Client ID + secret** + Test user |
 | **Opera GX** | Yes, with Web OAuth | Same as Opera |
-| **Safari** | Extra steps | Xcode converter + Web OAuth client |
+| **Safari** | Extra steps | Xcode converter + Web OAuth |
+
+## Fix: `access_denied` on Google login
+
+This is almost never the spreadsheet. Google is blocking the OAuth consent.
+
+1. Open [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
+2. If status is **Testing**, go to **Audience / Test users**
+3. **Add the exact Gmail** you use to sign in → Save
+4. Confirm the OAuth client is type **Web application** (for Opera)
+5. Authorized redirect URIs must match the Options page **exactly**, including the trailing slash:
+   `https://<extension-id>.chromiumapp.org/`
+6. Reload the extension → Options → paste **Client ID** and **Client secret** → Sign in
+
+Optional: set Publishing status to **In production** (sensitive scopes may show an “unverified app” warning; you can Advanced → Continue for personal use).
 
 ## Chrome / Edge
 
-1. `chrome://extensions` or `edge://extensions`
-2. Developer mode → **Load unpacked** → select `website-to-sheets`
-3. Create a Google Cloud OAuth client of type **Chrome Extension** (use the extension ID from Options)
-4. Put that Client ID in `manifest.json` → `oauth2.client_id`
-5. Reload the extension → Save to sheet (Google sign-in prompt)
+1. Load unpacked from `website-to-sheets`
+2. Create OAuth client type **Chrome Extension** (item ID = extension ID from Options)
+3. Put Client ID in `manifest.json` → `oauth2.client_id`
+4. Reload → Save to sheet
 
-## Opera / Opera GX (important)
+## Opera / Opera GX
 
-Opera shows **“function unsupported”** if the extension tries Chrome’s `identity.getAuthToken`. That API is stubbed in Opera.
+Opera returns **function unsupported** for `chrome.identity.getAuthToken`.
 
-### Fix
+1. `opera://extensions` → Load unpacked → `website-to-sheets`
+2. Open **Options** → copy the redirect URI
+3. Google Cloud → Credentials → Create **Web application** client
+4. Add that redirect URI under **Authorized redirect URIs**
+5. Copy **Client ID** and **Client secret** into Options → Save
+6. Add yourself as a **Test user** on the consent screen
+7. Options → **Sign in with Google**
+8. Use **Save to sheet** in the popup
 
-1. Open `opera://extensions` → Developer mode → **Load unpacked** → `website-to-sheets`
-2. Open the extension **Options** page (copy the redirect URI shown there)
-3. In [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials):
-   - Create OAuth client → type **Web application** (not Chrome Extension)
-   - Authorized redirect URIs → paste the Options redirect URI  
-     (looks like `https://<extension-id>.chromiumapp.org/`)
-4. Copy the Web Client ID → paste it in Options → **Save Web client ID**
-5. Click **Sign in with Google** on the Options page
-6. Then use **Save to sheet** in the popup
-
-You can keep a Chrome Extension client in `manifest.json` for Chrome/Edge; Opera needs the **Web application** client in Options.
-
-The spreadsheet must be editable by the Google account you sign in with. Making the sheet “public” does not replace sign-in.
+Your Google account must be able to **edit** the target spreadsheet.
 
 ## Safari (macOS)
 
-Safari does **not** load Chrome extensions directly. Convert on a Mac with Xcode:
+Convert with `xcrun safari-web-extension-converter`, then use the same Web application OAuth flow as Opera.
 
-```bash
-xcrun safari-web-extension-converter /path/to/website-to-sheets \
-  --project-location ~/SafariWebExtensions \
-  --app-name "Website to Sheets" \
-  --bundle-identifier com.yourname.websitetosheets
-```
-
-Use the same **Web application** OAuth flow as Opera (`launchWebAuthFlow` + redirect URI from Options).
-
-## Auth methods by browser
+## Auth methods
 
 | Browser | Method |
 | --- | --- |
-| Chrome / Edge | `chrome.identity.getAuthToken` + Chrome Extension client |
-| Opera / Opera GX / Safari | `launchWebAuthFlow` + Web application client (Options page) |
+| Chrome / Edge | `getAuthToken` + Chrome Extension client |
+| Opera / Opera GX / Safari | `launchWebAuthFlow` + auth code/PKCE + Web client ID/secret |

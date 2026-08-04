@@ -16,6 +16,7 @@ const SCOPES = [
 const TOKEN_KEY = "oauthAccessToken";
 const TOKEN_EXPIRES_KEY = "oauthAccessTokenExpires";
 const WEB_CLIENT_ID_KEY = "oauthWebClientId";
+const WEB_CLIENT_SECRET_KEY = "oauthWebClientSecret";
 
 const HEADER_ROW = [
   "Company name",
@@ -74,6 +75,12 @@ async function getStoredWebClientId() {
   return data[WEB_CLIENT_ID_KEY] || "";
 }
 
+async function getStoredWebClientSecret() {
+  // Keep secret in local storage (still visible to the extension, but not synced).
+  const data = await chrome.storage.local.get(WEB_CLIENT_SECRET_KEY);
+  return data[WEB_CLIENT_SECRET_KEY] || "";
+}
+
 /** Prefer Options Web client ID; fall back to manifest oauth2.client_id. */
 async function resolveWebClientId() {
   const stored = await getStoredWebClientId();
@@ -89,8 +96,30 @@ export async function setWebClientId(clientId) {
   await chrome.storage.sync.set({ [WEB_CLIENT_ID_KEY]: (clientId || "").trim() });
 }
 
+export async function setWebClientSecret(clientSecret) {
+  const value = (clientSecret || "").trim();
+  if (value) {
+    await chrome.storage.local.set({ [WEB_CLIENT_SECRET_KEY]: value });
+  } else {
+    await chrome.storage.local.remove(WEB_CLIENT_SECRET_KEY);
+  }
+}
+
 export async function getWebClientId() {
   return getStoredWebClientId();
+}
+
+export async function getWebClientCredentials() {
+  const [clientId, clientSecret, redirectUri] = await Promise.all([
+    getStoredWebClientId(),
+    getStoredWebClientSecret(),
+    Promise.resolve(getOAuthRedirectUri()),
+  ]);
+  return {
+    clientId,
+    hasSecret: Boolean(clientSecret),
+    redirectUri,
+  };
 }
 
 async function getStoredAccessToken() {
@@ -113,43 +142,120 @@ async function clearStoredAccessToken() {
   await chrome.storage.local.remove([TOKEN_KEY, TOKEN_EXPIRES_KEY]);
 }
 
-function parseTokenFromRedirect(redirectUrl) {
-  // Implicit flow returns tokens in the hash; some browsers use query.
+function explainOAuthError(error, description = "") {
+  const err = String(error || "").toLowerCase();
+  const detail = description ? ` (${description})` : "";
+
+  if (err.includes("access_denied")) {
+    return (
+      `Google returned access_denied${detail}. Almost always this means: ` +
+      `(1) OAuth consent screen is in Testing and your Google account is NOT added under Test users, or ` +
+      `(2) you clicked Cancel, or ` +
+      `(3) the OAuth client is the wrong type. ` +
+      `Fix: Google Cloud → OAuth consent screen → Audience/Test users → add your Gmail → save, then sign in again. ` +
+      `Also confirm the client is “Web application” and the redirect URI matches Options exactly.`
+    );
+  }
+  if (err.includes("redirect_uri")) {
+    return (
+      `Redirect URI mismatch${detail}. In the Web application OAuth client, Authorized redirect URIs must include exactly: ` +
+      `${getOAuthRedirectUri()}`
+    );
+  }
+  return `Google sign-in failed: ${error || "unknown"}${detail}`;
+}
+
+function parseOAuthRedirect(redirectUrl) {
   const url = new URL(redirectUrl);
   const hash = url.hash.replace(/^#/, "");
   const fromHash = new URLSearchParams(hash);
   const fromQuery = url.searchParams;
-  const token =
-    fromHash.get("access_token") || fromQuery.get("access_token");
-  const expiresIn = Number(
-    fromHash.get("expires_in") || fromQuery.get("expires_in") || "3600"
-  );
-  const error =
-    fromHash.get("error") ||
-    fromQuery.get("error") ||
-    fromHash.get("error_description") ||
-    fromQuery.get("error_description");
-  if (!token) {
-    throw new Error(
-      error
-        ? `Google sign-in failed: ${error}`
-        : "Google sign-in did not return an access token. Create a Web application OAuth client (not Chrome Extension), add the redirect URI from Options, and paste that Client ID on the Options page."
-    );
+
+  const pick = (key) => fromHash.get(key) || fromQuery.get(key);
+
+  const error = pick("error");
+  const errorDescription = pick("error_description");
+  if (error) {
+    throw new Error(explainOAuthError(error, errorDescription || ""));
   }
-  return { token, expiresIn };
+
+  return {
+    accessToken: pick("access_token"),
+    expiresIn: Number(pick("expires_in") || "3600"),
+    code: pick("code"),
+  };
 }
 
 function webAuthSetupError() {
   const redirect = getOAuthRedirectUri() || "(open Options to see redirect URI)";
   return new Error(
-    `Opera / this browser cannot use Chrome’s getAuthToken (“function unsupported”). ` +
-      `Open the extension Options page → create a Google Cloud OAuth client of type “Web application” → ` +
-      `add redirect URI ${redirect} → paste the Web Client ID there → Sign in, then Save again.`
+    `Opera needs Web OAuth setup. Open Options → create a Google Cloud OAuth client of type “Web application” → ` +
+      `add redirect URI ${redirect} → paste Client ID + Client secret → add yourself as a Test user on the consent screen → Sign in.`
   );
 }
 
+/** PKCE helpers */
+function base64UrlEncode(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let str = "";
+  for (const b of bytes) str += String.fromCharCode(b);
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function randomVerifier() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+async function challengeFromVerifier(verifier) {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return base64UrlEncode(digest);
+}
+
+async function exchangeCodeForToken({
+  code,
+  clientId,
+  clientSecret,
+  redirectUri,
+  codeVerifier,
+}) {
+  const body = new URLSearchParams({
+    code,
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    grant_type: "authorization_code",
+    code_verifier: codeVerifier,
+  });
+  if (clientSecret) body.set("client_secret", clientSecret);
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) {
+    const err = data.error || res.status;
+    const desc = data.error_description || "";
+    if (String(err).includes("unauthorized_client") || String(desc).includes("secret")) {
+      throw new Error(
+        `Token exchange failed (${err}: ${desc}). For a Web application client, paste the Client secret on the Options page.`
+      );
+    }
+    throw new Error(explainOAuthError(err, desc));
+  }
+  return {
+    token: data.access_token,
+    expiresIn: Number(data.expires_in || 3600),
+  };
+}
+
 /**
- * Cross-browser OAuth via launchWebAuthFlow + Web application client ID.
+ * Cross-browser OAuth via launchWebAuthFlow.
+ * Uses authorization code + PKCE (and client secret for Web application clients).
+ * Falls back to legacy implicit token flow only if code flow isn't returned.
  * @param {boolean} interactive
  */
 async function getTokenViaWebAuthFlow(interactive) {
@@ -163,6 +269,7 @@ async function getTokenViaWebAuthFlow(interactive) {
   if (!clientId) {
     throw webAuthSetupError();
   }
+  const clientSecret = await getStoredWebClientSecret();
 
   if (typeof chrome.identity?.launchWebAuthFlow !== "function") {
     throw new Error(
@@ -171,13 +278,19 @@ async function getTokenViaWebAuthFlow(interactive) {
   }
 
   const redirectUri = chrome.identity.getRedirectURL();
+  const codeVerifier = randomVerifier();
+  const codeChallenge = await challengeFromVerifier(codeVerifier);
+
   const authUrl =
     "https://accounts.google.com/o/oauth2/v2/auth" +
     `?client_id=${encodeURIComponent(clientId)}` +
-    `&response_type=token` +
+    `&response_type=code` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&scope=${encodeURIComponent(SCOPES)}` +
-    `&prompt=consent`;
+    `&prompt=consent` +
+    `&access_type=offline` +
+    `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+    `&code_challenge_method=S256`;
 
   const redirectUrl = await new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow(
@@ -185,7 +298,10 @@ async function getTokenViaWebAuthFlow(interactive) {
       (responseUrl) => {
         if (chrome.runtime.lastError || !responseUrl) {
           const msg = chrome.runtime.lastError?.message || "Sign-in was cancelled.";
-          // Common when Chrome Extension client ID is used with web flow
+          if (/access.?denied/i.test(msg)) {
+            reject(new Error(explainOAuthError("access_denied", msg)));
+            return;
+          }
           if (/redirect|client|invalid|mismatch/i.test(msg)) {
             reject(
               new Error(
@@ -202,9 +318,34 @@ async function getTokenViaWebAuthFlow(interactive) {
     );
   });
 
-  const { token, expiresIn } = parseTokenFromRedirect(redirectUrl);
-  await storeAccessToken(token, expiresIn);
-  return token;
+  const parsed = parseOAuthRedirect(redirectUrl);
+
+  if (parsed.code) {
+    if (!clientSecret) {
+      throw new Error(
+        "Google returned an auth code, but no Client secret is saved. " +
+          "Open Options → paste the Client secret from your Web application OAuth client → Save → Sign in again."
+      );
+    }
+    const { token, expiresIn } = await exchangeCodeForToken({
+      code: parsed.code,
+      clientId,
+      clientSecret,
+      redirectUri,
+      codeVerifier,
+    });
+    await storeAccessToken(token, expiresIn);
+    return token;
+  }
+
+  if (parsed.accessToken) {
+    await storeAccessToken(parsed.accessToken, parsed.expiresIn);
+    return parsed.accessToken;
+  }
+
+  throw new Error(
+    "Google sign-in did not return a code or token. Check Test users, redirect URI, and that the client type is Web application."
+  );
 }
 
 async function getTokenViaGetAuthToken(interactive) {

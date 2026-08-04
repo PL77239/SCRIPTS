@@ -19,14 +19,24 @@ const authLine = document.getElementById("authLine");
 const status = document.getElementById("status");
 const redirectUri = document.getElementById("redirectUri");
 const redirectUriTop = document.getElementById("redirectUriTop");
+const redirectUriMid = document.getElementById("redirectUriMid");
 const webClientId = document.getElementById("webClientId");
+const webClientSecret = document.getElementById("webClientSecret");
 const webClientStatus = document.getElementById("webClientStatus");
+const secretHint = document.getElementById("secretHint");
 const operaCallout = document.getElementById("operaCallout");
 
 extensionIdEl.textContent = chrome.runtime.id;
 
 if (operaCallout && !/\bOPR\/|\bOpera\b/i.test(navigator.userAgent)) {
   operaCallout.style.display = "none";
+}
+
+function setRedirectDisplays(uri) {
+  const text = uri || "(unavailable in this browser)";
+  redirectUri.textContent = text;
+  if (redirectUriTop) redirectUriTop.textContent = text;
+  if (redirectUriMid) redirectUriMid.textContent = text;
 }
 
 async function refreshAuth() {
@@ -43,22 +53,24 @@ async function refreshAuth() {
 async function refreshWebClient() {
   try {
     const data = await send("GET_WEB_CLIENT_ID");
-    const uri = data.redirectUri || "(unavailable in this browser)";
-    redirectUri.textContent = uri;
-    if (redirectUriTop) redirectUriTop.textContent = uri;
+    setRedirectDisplays(data.redirectUri);
     webClientId.value = data.clientId || "";
+    webClientSecret.value = "";
+    secretHint.textContent = data.hasSecret
+      ? "A client secret is already saved on this browser. Leave the secret field blank to keep it, or paste a new one to replace it."
+      : "No client secret saved yet — required for Opera Web application sign-in.";
   } catch (err) {
-    redirectUri.textContent = err.message;
-    if (redirectUriTop) redirectUriTop.textContent = err.message;
+    setRedirectDisplays(err.message);
   }
 }
 
 document.getElementById("signIn").addEventListener("click", async () => {
   status.textContent = "Opening Google sign-in…";
   try {
-    if (!webClientId.value.trim() && /\bOPR\/|\bOpera\b/i.test(navigator.userAgent)) {
+    const isOpera = /\bOPR\/|\bOpera\b/i.test(navigator.userAgent);
+    if (isOpera && !webClientId.value.trim()) {
       status.textContent =
-        "Save a Web application Client ID above first (Opera cannot use the Chrome Extension client alone).";
+        "Save a Web application Client ID (+ secret) above first.";
       return;
     }
     await send("AUTH_SIGN_IN");
@@ -81,8 +93,15 @@ document.getElementById("signOut").addEventListener("click", async () => {
 
 document.getElementById("saveWebClient").addEventListener("click", async () => {
   try {
-    await send("SET_WEB_CLIENT_ID", { clientId: webClientId.value.trim() });
-    webClientStatus.textContent = "Saved. Now click Sign in with Google.";
+    const payload = { clientId: webClientId.value.trim() };
+    // Only send secret when the user typed something (blank keeps existing).
+    if (webClientSecret.value.trim()) {
+      payload.clientSecret = webClientSecret.value.trim();
+    }
+    const data = await send("SET_WEB_CLIENT_ID", payload);
+    webClientStatus.textContent = data.hasSecret
+      ? "Saved. Add yourself as a Test user if needed, then click Sign in with Google."
+      : "Client ID saved, but no secret yet — paste the Client secret and Save again.";
     await refreshWebClient();
   } catch (err) {
     webClientStatus.textContent = err.message;

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Website → Sheets — Setup</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <p class="eyebrow">Scripts / Website → Sheets</p>
+        <h1>Connect Google Sheets</h1>
+        <p class="lede">
+          One-time Google Cloud setup so the extension can write rows to your
+          spreadsheets. After that, switch sheets from the popup the same way
+          you switch repositories in Cursor.
+        </p>
+      </header>
+
+      <section class="card callout danger">
+        <h2>Seeing “access denied”?</h2>
+        <ol>
+          <li>
+            Open
+            <a
+              href="https://console.cloud.google.com/apis/credentials/consent"
+              target="_blank"
+              rel="noopener"
+              >OAuth consent screen</a
+            >
+          </li>
+          <li>
+            If Publishing status is <strong>Testing</strong>, open
+            <strong>Audience</strong> / <strong>Test users</strong> and
+            <strong>add the exact Gmail</strong> you sign in with → Save
+          </li>
+          <li>
+            Confirm your OAuth client type is
+            <strong>Web application</strong> (Opera cannot use “Chrome
+            Extension” clients)
+          </li>
+          <li>
+            Under that Web client, Authorized redirect URIs must include
+            <em>exactly</em> the URI below (trailing slash matters)
+          </li>
+        </ol>
+        <p class="mono highlight" id="redirectUriTop">Loading…</p>
+      </section>
+
+      <section class="card callout" id="operaCallout">
+        <h2>Using Opera or Opera GX?</h2>
+        <p>
+          Opera does <strong>not</strong> support Chrome’s
+          <code>getAuthToken</code>. Use a
+          <strong>Web application</strong> client ID <em>and</em> Client
+          secret below, add yourself as a Test user, then Sign in.
+        </p>
+      </section>
+
+      <ol class="steps">
+        <li>
+          <h2>Create a Google Cloud project</h2>
+          <p>
+            Open
+            <a
+              href="https://console.cloud.google.com/"
+              target="_blank"
+              rel="noopener"
+              >Google Cloud Console</a
+            >, create a project (or pick an existing one).
+          </p>
+        </li>
+        <li>
+          <h2>Enable APIs</h2>
+          <p>Enable both of these for the project:</p>
+          <ul>
+            <li>
+              <a
+                href="https://console.cloud.google.com/apis/library/sheets.googleapis.com"
+                target="_blank"
+                rel="noopener"
+                >Google Sheets API</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                target="_blank"
+                rel="noopener"
+                >Google Drive API</a
+              >
+              (used only to browse recent spreadsheets)
+            </li>
+          </ul>
+        </li>
+        <li>
+          <h2>Configure the OAuth consent screen</h2>
+          <p>
+            <strong>APIs &amp; Services → OAuth consent screen</strong>:
+            External (or Internal for Workspace). While status is
+            <em>Testing</em>, you <strong>must</strong> add your Google account
+            under Test users — otherwise Google shows
+            <code>access_denied</code>.
+          </p>
+          <p>Scopes needed:</p>
+          <ul class="mono">
+            <li>https://www.googleapis.com/auth/spreadsheets</li>
+            <li>https://www.googleapis.com/auth/drive.readonly</li>
+          </ul>
+        </li>
+        <li>
+          <h2>Create OAuth client(s)</h2>
+          <p>
+            <strong>Chrome / Edge:</strong> Credentials → Create → OAuth client
+            ID → application type <em>Chrome Extension</em>. Use this extension
+            ID as the item ID, then put the Client ID in
+            <code>manifest.json</code> → <code>oauth2.client_id</code>.
+          </p>
+          <p class="mono highlight" id="extensionId">Loading…</p>
+          <p>
+            <strong>Opera / Opera GX / Safari:</strong> Create a client with
+            type <strong>Web application</strong>. Add this Authorized redirect
+            URI:
+          </p>
+          <p class="mono highlight" id="redirectUriMid">Loading…</p>
+          <p>
+            Copy both the <strong>Client ID</strong> and
+            <strong>Client secret</strong> into the form below.
+          </p>
+        </li>
+        <li>
+          <h2>Prepare a spreadsheet</h2>
+          <p>
+            Sign in with a Google account that can <strong>edit</strong> the
+            sheet. “Public link” alone is not enough.
+          </p>
+        </li>
+      </ol>
+
+      <section class="card">
+        <h2>Web OAuth client (required on Opera)</h2>
+        <p>Redirect URI to add in Google Cloud:</p>
+        <p class="mono highlight" id="redirectUri">Loading…</p>
+        <label class="field">
+          Web OAuth client ID
+          <input
+            type="text"
+            id="webClientId"
+            placeholder="xxxxx.apps.googleusercontent.com"
+            autocomplete="off"
+          />
+        </label>
+        <label class="field">
+          Web OAuth client secret
+          <input
+            type="password"
+            id="webClientSecret"
+            placeholder="GOCSPX-…"
+            autocomplete="off"
+          />
+        </label>
+        <p class="hint" id="secretHint"></p>
+        <div class="actions">
+          <button type="button" class="btn secondary" id="saveWebClient">
+            Save Web client ID + secret
+          </button>
+        </div>
+        <p class="hint" id="webClientStatus"></p>
+      </section>
+
+      <section class="card">
+        <h2>Account</h2>
+        <p id="authLine">Checking…</p>
+        <div class="actions">
+          <button type="button" class="btn primary" id="signIn">
+            Sign in with Google
+          </button>
+          <button type="button" class="btn secondary" id="signOut">
+            Sign out
+          </button>
+        </div>
+        <p class="hint" id="status"></p>
+      </section>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
